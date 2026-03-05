@@ -151,7 +151,9 @@ Instructions:
       name: source.charAt(0).toUpperCase() + source.slice(1),
       agentId: agentId,
       wakeMode: "now",
-      deliver: false
+      deliver: true,
+      channel: "telegram",
+      to: "8428193610"
     });
 
     // Forward to OpenClaw /hooks/agent
