@@ -30,11 +30,6 @@ export default {
       return new Response("Not Found", { status: 404 });
     }
 
-    // Passthrough if already authenticated with OpenClaw token (forwarded by this worker)
-    if (request.headers.get("Authorization") === `Bearer ${env.OPENCLAW_HOOKS_TOKEN}`) {
-      return fetch(request, { headers: request.headers });
-    }
-
     const source = parts[1];                        // github | linear | expo
     const agentName = parts[2] || "fey";            // default to "fey" if omitted
 
