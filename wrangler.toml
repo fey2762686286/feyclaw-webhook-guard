@@ -1,0 +1,11 @@
+name = "feyclaw-webhook-guard"
+main = "webhook-guard.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# Secrets are set via: wrangler secret put <NAME>
+# Do NOT put actual secret values here
+
+routes = [
+  { pattern = "hook.feyhook.win/hooks/*", zone_name = "feyhook.win" }
+]
