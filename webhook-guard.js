@@ -66,13 +66,88 @@ export default {
       return new Response("Invalid signature", { status: 401 });
     }
 
-    // Transform payload into OpenClaw /hooks/agent format
-    const event = request.headers.get("x-github-event") ||
-                  request.headers.get("linear-event") ||
-                  "webhook";
+    // Build agent message based on source
+    let message;
+    let shouldForward = true;
+
+    if (source === "linear") {
+      const payload = JSON.parse(bodyText);
+      const type = payload.type;           // "Issue"
+      const action = payload.action;       // "create", "update", "remove"
+      const data = payload.data || {};
+      const state = data.state?.name || "";
+      const assignee = data.assignee?.name || "";
+      const title = data.title || "";
+      const identifier = data.identifier || "";
+      const url = data.url || "";
+
+      // Only act on relevant events
+      const relevant =
+        (action === "create") ||
+        (action === "update" && ["In Progress", "Todo", "Backlog"].includes(state)) ||
+        (action === "update" && data.assignee);
+
+      if (!relevant) {
+        return new Response("Ignored", { status: 200 });
+      }
+
+      message = `Linear issue update for Cau:
+
+Issue: ${identifier} — ${title}
+State: ${state}
+Assignee: ${assignee}
+Action: ${action}
+URL: ${url}
+
+Raw payload:
+${bodyText}
+
+Instructions:
+- If this issue is assigned to you and in "In Progress" or "Todo", pick it up and start working on it.
+- If it's a new issue assigned to you, acknowledge it and plan your approach.
+- Check Linear for full context if needed.
+- Follow the Android development workflow: feature branch, QA checklist, PR.
+- If the issue is not yours or not actionable, reply HEARTBEAT_OK.`;
+
+    } else if (source === "github") {
+      const payload = JSON.parse(bodyText);
+      const event = request.headers.get("x-github-event") || "unknown";
+      const action = payload.action || "";
+      const pr = payload.pull_request;
+      const review = payload.review;
+
+      // Only act on PR review comments and CI failures
+      const relevant =
+        (event === "pull_request_review" && review?.state === "changes_requested") ||
+        (event === "pull_request_review_comment") ||
+        (event === "check_run" && payload.check_run?.conclusion === "failure");
+
+      if (!relevant) {
+        return new Response("Ignored", { status: 200 });
+      }
+
+      message = `GitHub event for Cau:
+
+Event: ${event} / ${action}
+PR: ${pr?.title || "N/A"} (${pr?.html_url || payload.check_run?.html_url || ""})
+
+Raw payload:
+${bodyText}
+
+Instructions:
+- If this is a PR review requesting changes, address the feedback and push an update.
+- If this is a CI failure on your PR, investigate and fix it.
+- Follow the Android development workflow. No direct pushes to main or development.
+- If not actionable, reply HEARTBEAT_OK.`;
+
+    } else {
+      // Expo and others — generic pass-through
+      const event = request.headers.get("expo-event") || "webhook";
+      message = `Incoming ${source} webhook: ${event}\n\n${bodyText}`;
+    }
 
     const ocPayload = JSON.stringify({
-      message: `Incoming ${source} webhook: ${event}\n\n${bodyText}`,
+      message,
       name: source.charAt(0).toUpperCase() + source.slice(1),
       agentId: agentId,
       wakeMode: "now",
